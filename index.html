@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="icon" href="favicon.png">
+    <title>myWord</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { color-scheme: dark; }
+        body { background: #000000; color: #ffffff; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #111111; }
+        ::-webkit-scrollbar-thumb { background: #333333; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555555; }
+
+        input, textarea, select {
+            background: #0a0a0a !important;
+            color: #ffffff !important;
+            border-color: #222222 !important;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #22c55e !important;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+        }
+        input::placeholder, textarea::placeholder { color: #555555 !important; }
+
+        .tab-btn {
+            transition: all 0.2s ease;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            border-bottom-color: #22c55e !important;
+            color: #ffffff !important;
+        }
+        .tab-btn:not(.active) {
+            color: #777777;
+        }
+
+        .version-badge {
+            font-family: 'Courier New', monospace;
+            font-weight: 900;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .accent-green { color: #22c55e; }
+        .accent-yellow { color: #eab308; }
+        .accent-red { color: #ef4444; }
+
+        .btn-primary { background: #ffffff; color: #000000; font-weight: 700; transition: all 0.2s ease; }
+        .btn-primary:hover { background: #e5e5e5; }
+        .btn-ghost { background: #111111; color: #ffffff; border: 1px solid #222222; transition: all 0.2s ease; }
+        .btn-ghost:hover { background: #1a1a1a; border-color: #333333; }
+        .btn-green { background: #22c55e; color: #000000; font-weight: 700; }
+        .btn-green:hover { background: #16a34a; }
+        .btn-red { background: #ef4444; color: #ffffff; font-weight: 700; }
+        .btn-red:hover { background: #dc2626; }
+        /* 🔍 Analyzer spinner */
+        .analyzer-spinner {
+            display: inline-block;
+            width: 48px;
+            height: 48px;
+            border: 4px solid #222222;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: analyzer-spin 0.8s linear infinite;
+        }
+        @keyframes analyzer-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 🔀 Переключатель режима отображения "Today's Words" */
+        .view-mode-btn {
+            color: #666666;
+            background: transparent;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .view-mode-btn:hover {
+            color: #aaaaaa;
+        }
+        .view-mode-btn.view-mode-active {
+            background: #22c55e;
+            color: #000000;
+        }
+
+        /* 🎞️ Плавный переход при смене режима вида слов */
+        .view-transition {
+            transition: opacity 0.18s ease, transform 0.18s ease;
+        }
+        .view-transition-out {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+
+        /* 🗂️ Карточка слова в вертикальном режиме */
+        .vertical-card-item {
+            transition: background 0.2s ease;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased">
+
+<div class="max-w-2xl mx-auto px-4 py-6 pb-24">
+
+    <!-- ВЕРСИЯ -->
+    <div class="mb-4 flex items-center justify-between">
+        <div class="version-badge text-2xl">v3.7</div>
+    </div>
+
+    <!-- НАВИГАЦИЯ -->
+    <div class="bg-black border border-[#222222] rounded-2xl p-2 flex gap-2 mb-6 sticky top-2 z-10">
+        <button data-nav="create" class="nav-btn flex-1 py-3 rounded-xl font-semibold transition btn-primary">📝 Create</button>
+        <button data-nav="today" class="nav-btn flex-1 py-3 rounded-xl font-semibold transition btn-ghost">📚 Today</button>
+        <button data-nav="dictionaries" class="nav-btn flex-1 py-3 rounded-xl font-semibold transition btn-ghost">📖 Library</button>
+        <button data-nav="analytics" class="nav-btn flex-1 py-3 rounded-xl font-semibold transition btn-ghost">📊 Analytics</button>
+    </div>
+
+    <!-- ============ SCREEN 1: CREATE ============ -->
+    <div id="createScreen" class="screen">
+        <div class="bg-black border border-[#222222] rounded-2xl p-5 mb-4">
+
+            <div class="flex gap-2 border-b border-[#222222] mb-4">
+                <button id="tabCreateWord" class="tab-btn active flex-1 py-2 font-bold">📝 Add Word</button>
+                <button id="tabCreatePhrase" class="tab-btn flex-1 py-2 font-bold">💬 Add Phrase</button>
+            </div>
+
+            <!-- СЛОВА -->
+            <div id="createWordForm">
+                <div class="flex items-center justify-between mb-4 gap-2">
+                    <h2 class="text-xl font-bold text-white">➕ New Dictionary</h2>
+                    <button id="copyPromptBtn" type="button" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2 px-3 rounded-lg transition shadow-lg shadow-purple-500/20 whitespace-nowrap">
+                        📋 Copy AI Prompt
+                    </button>
+                </div>
+
+                <input type="text" id="dictName" placeholder="Dictionary name" class="w-full border rounded-xl p-3 mb-3">
+                <textarea id="wordsInput" rows="8" placeholder="Format: English phrase — Русская фраза — English word — перевод слова
+
+Example:
+I need to book a table — Мне нужно забронировать столик — book — бронировать" class="w-full border rounded-xl p-3 mb-2 font-mono text-sm"></textarea>
+                <p class="text-xs text-gray-500 mb-3 leading-relaxed">
+                    <b class="accent-green">Формат:</b> фраза EN — фраза RU — слово EN — перевод слова<br>
+                    <span class="text-gray-600">Разделитель: <code>—</code> (длинное тире) или <code> - </code> (дефис с пробелами). Нужно ровно 4 части.</span>
+                </p>
+
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-400 mb-1">📅 Creation date</label>
+                    <input type="date" id="createDate" class="w-full border rounded-xl p-3 text-white">
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">📌 Word source</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button data-source="ai" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">🤖 AI</button>
+                        <button data-source="youtube" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">▶️ YouTube</button>
+                        <button data-source="website" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">🌐 Website</button>
+                        <button data-source="article" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">📄 Article</button>
+                        <button data-source="film" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">🎬 Film</button>
+                        <button data-source="game" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">🎮 Game</button>
+                        <button data-source="self" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">✏️ Self</button>
+                        <button data-source="practice" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">🎯 In practice</button>
+                        <button data-source="social" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">📱 Social media</button>
+                        <button data-source="book" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">📖 Book</button>
+                        <button data-source="other" class="source-btn btn-ghost py-2 px-4 rounded-xl text-sm">📌 Other</button>
+                    </div>
+                    <div id="selectedSources" class="mt-2 flex flex-wrap gap-1"></div>
+                </div>
+
+                <button id="addLinksBtn" class="w-full btn-ghost py-2 rounded-xl text-sm mb-3">🔗 Add links (sources)</button>
+
+                <label class="block text-sm font-medium text-gray-400 mb-1">Review interval (days)</label>
+                <select id="intervalSelect" class="w-full border rounded-xl p-3 mb-4">
+                    <option value="1" selected>1 day</option>
+                    <option value="3">3 days</option>
+                    <option value="7">7 days</option>
+                    <option value="14">14 days</option>
+                    <option value="30">30 days</option>
+                </select>
+
+                <button id="saveDictBtn" class="w-full btn-green py-3 rounded-xl text-lg">💾 Save Dictionary</button>
+            </div>
+
+            <!-- ФРАЗЫ -->
+            <div id="createPhraseForm" class="hidden">
+                <h2 class="text-xl font-bold mb-2 text-white">💬 New Phrases</h2>
+                <p class="text-xs text-gray-500 mb-3">Формат: <code class="accent-green">english — русский</code></p>
+
+                <textarea id="phrasesInput" rows="6" placeholder="How are you? — Как дела?" class="w-full border rounded-xl p-3 mb-3 font-mono text-sm"></textarea>
+
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-400 mb-1">📅 Creation date</label>
+                    <input type="date" id="createPhraseDate" class="w-full border rounded-xl p-3 text-white">
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">📌 Phrase source</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button data-source="everyday" class="phrase-source-btn btn-ghost py-2 px-4 rounded-xl text-sm">💬 Everyday English</button>
+                        <button data-source="university" class="phrase-source-btn btn-ghost py-2 px-4 rounded-xl text-sm">🎓 University &amp; Lectures</button>
+                        <button data-source="discussion" class="phrase-source-btn btn-ghost py-2 px-4 rounded-xl text-sm">🗣️ Communication &amp; Discussions</button>
+                        <button data-source="it" class="phrase-source-btn btn-ghost py-2 px-4 rounded-xl text-sm">💻 IT &amp; Programming</button>
+                        <button data-source="ai-cyber" class="phrase-source-btn btn-ghost py-2 px-4 rounded-xl text-sm">🤖 AI &amp; Cybersecurity</button>
+                        <button data-source="academic" class="phrase-source-btn btn-ghost py-2 px-4 rounded-xl text-sm">📚 Academic English</button>
+                    </div>
+                    <div id="selectedPhraseSources" class="mt-2 flex flex-wrap gap-1"></div>
+                </div>
+
+                <label class="block text-sm font-medium text-gray-400 mb-1">Review interval (days)</label>
+                <select id="phraseIntervalSelect" class="w-full border rounded-xl p-3 mb-4">
+                    <option value="1" selected>1 day</option>
+                    <option value="3">3 days</option>
+                    <option value="7">7 days</option>
+                    <option value="14">14 days</option>
+                    <option value="30">30 days</option>
+                </select>
+
+                <button id="savePhraseBtn" class="w-full btn-green py-3 rounded-xl text-lg">💾 Save Phrases</button>
+                <div id="phraseLimitInfo" class="mt-2 text-xs text-center text-gray-500"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ SCREEN 2: TODAY ============ -->
+    <div id="todayScreen" class="screen hidden">
+        <div class="bg-black border border-[#222222] rounded-2xl p-5 mb-4">
+            <div class="flex gap-2 border-b border-[#222222] mb-4">
+                <button id="tabTodayWords" class="tab-btn active flex-1 py-2 font-bold">📝 Words</button>
+                <button id="tabTodayPhrases" class="tab-btn flex-1 py-2 font-bold">💬 Phrases</button>
+            </div>
+
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-white" id="todayTitle">📅 Today's Words</h2>
+                <div class="flex items-center gap-2">
+                    <div id="todayViewToggle" class="flex gap-1 bg-[#0f0f0f] border border-[#222222] rounded-lg p-1">
+                        <button type="button" id="viewModeHorizontal" data-mode="horizontal" class="view-mode-btn p-1.5 rounded-md" title="Table view">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"></rect><rect x="3" y="10" width="18" height="4" rx="1"></rect><rect x="3" y="16" width="18" height="4" rx="1"></rect></svg>
+                        </button>
+                        <button type="button" id="viewModeVertical" data-mode="vertical" class="view-mode-btn p-1.5 rounded-md" title="Card view">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="7" height="18" rx="1"></rect><rect x="13" y="3" width="7" height="8" rx="1"></rect><rect x="13" y="13" width="7" height="8" rx="1"></rect></svg>
+                        </button>
+                    </div>
+                    <span id="todayCount" class="accent-green border border-green-500/30 px-3 py-1 rounded-full text-sm font-bold">0</span>
+                </div>
+            </div>
+
+            <div id="todayCardsContainer" class="space-y-4"></div>
+            <div id="todayPhrasesContainer" class="space-y-3 hidden"></div>
+        </div>
+    </div>
+
+    <!-- ============ SCREEN 3: LIBRARY ============ -->
+    <div id="librariesScreen" class="screen hidden">
+        <div class="bg-black border border-[#222222] rounded-2xl p-5">
+            <div class="flex gap-2 border-b border-[#222222] mb-4">
+                <button id="tabLibWords" class="tab-btn active flex-1 py-2 font-bold">📝 Words</button>
+                <button id="tabLibPhrases" class="tab-btn flex-1 py-2 font-bold">💬 Phrases</button>
+            </div>
+
+            <div id="libWordsContainer">
+                <!-- 🔍 DUPLICATE ANALYZER BUTTON -->
+                <button id="duplicateAnalyzerBtn" class="w-full mb-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20">
+                    <span>🛡️</span>
+                    <span>Duplicate Analyzer</span>
+                </button>
+
+                <h2 class="text-xl font-bold mb-4 text-white">📚 All Dictionaries</h2>
+                <div id="dictList" class="space-y-3"></div>
+            </div>
+
+            <div id="libPhrasesContainer" class="hidden">
+                <h2 class="text-xl font-bold mb-4 text-white">💬 All Phrases</h2>
+                <div id="phrasesList" class="space-y-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ SCREEN 4: ANALYTICS ============ -->
+<div id="analyticsScreen" class="screen hidden">
+    <div class="bg-black border border-[#222222] rounded-2xl p-5 mb-4">
+        <h2 class="text-xl font-bold mb-4 text-white">📊 Analytics</h2>
+
+        <!-- Фильтры -->
+        <div class="flex flex-wrap gap-2 mb-4">
+            <button data-filter="day" class="filter-btn btn-ghost px-3 py-1 rounded-full text-sm">1 Day</button>
+            <button data-filter="week" class="filter-btn btn-primary px-3 py-1 rounded-full text-sm">7 Days</button>
+            <button data-filter="month" class="filter-btn btn-ghost px-3 py-1 rounded-full text-sm">30 Days</button>
+            <button data-filter="6months" class="filter-btn btn-ghost px-3 py-1 rounded-full text-sm">6 Months</button>
+            <button data-filter="year" class="filter-btn btn-ghost px-3 py-1 rounded-full text-sm">1 Year</button>
+            <button data-filter="all" class="filter-btn btn-ghost px-3 py-1 rounded-full text-sm">All Time</button>
+        </div>
+
+        <!-- Основные цифры -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="bg-black border border-[#222222] rounded-xl p-3 text-center">
+                <div class="text-2xl font-bold text-white" id="totalDicts">0</div>
+                <div class="text-xs text-gray-400">📚 Dictionaries</div>
+            </div>
+            <div class="bg-black border border-[#222222] rounded-xl p-3 text-center">
+                <div class="text-2xl font-bold text-white" id="totalWords">0</div>
+                <div class="text-xs text-gray-400">📝 Total Words</div>
+            </div>
+            <div class="bg-black border border-[#222222] rounded-xl p-3 text-center">
+                <div class="text-2xl font-bold accent-green" id="learnedWords">0</div>
+                <div class="text-xs text-gray-400">✅ Learned</div>
+            </div>
+            <div class="bg-black border border-[#222222] rounded-xl p-3 text-center">
+                <div class="text-2xl font-bold accent-yellow" id="remainingWords">0</div>
+                <div class="text-xs text-gray-400">⏳ Remaining</div>
+            </div>
+        </div>
+
+        <!-- Трекер фраз -->
+        <div class="grid grid-cols-3 gap-3 mb-4">
+            <div class="bg-black border border-[#222222] rounded-xl p-3 text-center">
+                <div class="text-2xl font-bold accent-green" id="totalPhrases">0</div>
+                <div class="text-xs text-gray-400">💬 Total</div>
+            </div>
+            <div class="bg-black border border-[#222222] rounded-xl p-3 text-center">
+                <div class="text-2xl font-bold accent-yellow" id="learnedPhrases">0</div>
+                <div class="text-xs text-gray-400">✅ Learned</div>
+            </div>
+            <div class="bg-black border border-[#222222] rounded-xl p-3 text-center">
+                <div class="text-2xl font-bold text-white" id="activePhrases">0</div>
+                <div class="text-xs text-gray-400">⏳ Active</div>
+            </div>
+        </div>
+
+        <!-- Прогресс -->
+        <div class="mb-4">
+            <div class="flex justify-between text-sm text-gray-400 mb-1">
+                <span>📊 Progress (words)</span>
+                <span id="progressPercent" class="accent-green font-bold">0%</span>
+            </div>
+            <div class="w-full bg-[#111111] rounded-full h-3 overflow-hidden border border-[#222222]">
+                <div id="progressBar" class="bg-white h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <div id="sourcesStats" class="flex flex-wrap gap-2 mt-4"></div>
+        </div>
+
+        <!-- ========== БОЛЬШОЙ ГРАФИК: СЛОВА + ФРАЗЫ ========== -->
+        <div class="mb-4">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-sm font-bold text-gray-400">📈 Activity — Words vs Phrases</h3>
+                <div class="flex gap-3 text-xs">
+                    <span class="flex items-center gap-1"><span class="inline-block w-3 h-1 bg-white"></span> Words</span>
+                    <span class="flex items-center gap-1"><span class="inline-block w-3 h-1 bg-red-500"></span> Phrases</span>
+                </div>
+            </div>
+            <div id="chartContainer" class="bg-black rounded-xl p-4 border border-[#222222]"></div>
+        </div>
+
+        <!-- ========== НОВЫЙ БЛОК: СОЗДАНО ПО ДАТАМ ========== -->
+        <div class="mb-4">
+            <h3 class="text-sm font-bold text-gray-400 mb-2">📅 Created by Date</h3>
+            <div id="createdByDate" class="bg-black rounded-xl border border-[#222222] p-3 max-h-72 overflow-y-auto"></div>
+        </div>
+
+        <!-- ========== НОВЫЙ БЛОК: ОБЗОР СЛОВАРЕЙ И ФРАЗ ========== -->
+        <div class="mb-4">
+            <h3 class="text-sm font-bold text-gray-400 mb-2">🗂️ Dictionaries & Phrases Overview</h3>
+            <div id="dictionariesOverview" class="bg-black rounded-xl border border-[#222222] p-3 max-h-72 overflow-y-auto"></div>
+        </div>
+
+        <!-- ========== НОВЫЙ БЛОК: ПРОГРЕСС ПО СЛОВАРЯМ ========== -->
+        <div class="mb-4">
+            <h3 class="text-sm font-bold text-gray-400 mb-2">📊 Progress by Dictionary</h3>
+            <div id="dictStatsContainer" class="bg-black rounded-xl border border-[#222222] p-3 space-y-1"></div>
+        </div>
+
+        <!-- Forecast -->
+        <div class="mb-4">
+            <h3 class="text-sm font-bold text-gray-400 mb-2">📅 Forecast — Words by Day</h3>
+            <div id="forecastContainer" class="space-y-2"></div>
+<div id="forecastWarning" class="mt-2"></div>
+        </div>
+
+        <button id="exportPdfBtn" class="w-full btn-red py-3 rounded-xl text-lg">
+            📥 Export Report
+        </button>
+    </div>
+</div>
+
+<!-- MODAL: DUPLICATE ANALYZER (заполняется JS) -->
+<div id="analyzerModal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
+    <div class="bg-[#0f0f1a] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col border border-[#2a2a4a] shadow-2xl">
+        <div class="flex justify-between items-center p-5 border-b border-[#2a2a4a]">
+            <h3 class="text-lg font-bold text-indigo-400">🛡️ Duplicate Analyzer</h3>
+            <button id="closeAnalyzerModal" class="text-gray-400 hover:text-white text-2xl leading-none transition">&times;</button>
+        </div>
+        <div id="analyzerContent" class="p-5 overflow-y-auto flex-1"></div>
+    </div>
+</div>
+
+<!-- MODAL: LINKS -->
+<div id="linksModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/90">
+    <div class="bg-black border border-[#222222] rounded-2xl max-w-lg w-full p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-white">🔗 Source Links</h3>
+            <button id="closeLinksModal" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+        <div id="linksContainer" class="space-y-2 max-h-60 overflow-y-auto">
+            <div class="flex gap-2">
+                <input type="url" class="link-input w-full border rounded-lg p-2 text-sm" placeholder="https://...">
+                <button class="remove-link-btn accent-red text-xl">&times;</button>
+            </div>
+        </div>
+        <button id="addLinkBtn" class="w-full mt-3 btn-ghost py-2 rounded-lg text-sm">➕ Add another link</button>
+        <button id="saveLinksBtn" class="w-full mt-3 btn-green py-2 rounded-lg">✅ Save Links</button>
+    </div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+    }
+}
+</script>
+
+<script type="module">
+    window.firebaseConfig = {
+        apiKey: "AIzaSyBcQV1vP0_Sp9p9GZQygbJMoJx3Y4XoNI0",
+        authDomain: "srs-trainer.firebaseapp.com",
+        projectId: "srs-trainer",
+        storageBucket: "srs-trainer.firebasestorage.app",
+        messagingSenderId: "281331130638",
+        appId: "1:281331130638:web:49a6e8d58ff6ff36d1b75f",
+        measurementId: "G-0WNET89LVL"
+    };
+</script>
+
+<script type="module" src="db.js"></script>
+<script type="module" src="app.js"></script>
+<script type="module" src="phrases.js"></script>
+<script type="module" src="analytics-extra.js"></script>
+
+<!-- ADMIN PANEL -->
+<div class="max-w-2xl mx-auto px-4 mt-8 mb-4">
+    <div class="bg-black border border-[#222222] rounded-2xl overflow-hidden">
+        <div class="bg-gradient-to-r from-[#111111] to-[#1a1a1a] px-5 py-3 border-b border-[#222222]">
+            <h3 class="text-white font-bold flex items-center gap-2">
+                <span>🛠️</span> Admin Panel
+                <span class="text-xs bg-[#222222] px-2 py-0.5 rounded-full ml-2 text-gray-400 border border-[#333333]">Tech Services</span>
+            </h3>
+        </div>
+        <div class="p-4 space-y-3">
+            <p class="text-xs text-gray-400 mb-2 border-l-2 border-green-500 pl-3">
+                🔧 Management links: database, hosting, bot logs
+            </p>
+
+            <a href="https://splendorous-treacle-c428ae.netlify.app/" 
+               target="_blank" 
+               class="flex items-center gap-3 p-3 bg-green-600/10 rounded-xl hover:bg-green-600/20 transition group border border-green-500/20">
+                <div class="w-10 h-10 bg-green-600/20 rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition">🎯</div>
+                <div class="flex-1">
+                    <div class="font-bold text-gray-200">Phrase Trainer</div>
+                    <div class="text-xs text-gray-400">Word Trainer Pro — build sentences from words</div>
+                </div>
+                <div class="text-gray-500">↗</div>
+            </a>
+
+            <a href="https://console.firebase.google.com/project/srs-trainer/firestore/databases/-default-/data" 
+               target="_blank" 
+               class="flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition group border border-white/10">
+                <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition">🔥</div>
+                <div class="flex-1">
+                    <div class="font-bold text-gray-200">Firebase Firestore</div>
+                    <div class="text-xs text-gray-400">Database — all words and dictionaries</div>
+                </div>
+                <div class="text-gray-500">↗</div>
+            </a>
+
+            <a href="https://console.firebase.google.com/project/srs-trainer/firestore/databases/-default-/security/rules" 
+               target="_blank" 
+               class="flex items-center gap-3 p-3 bg-yellow-600/10 rounded-xl hover:bg-yellow-600/20 transition group border border-yellow-500/20">
+                <div class="w-10 h-10 bg-yellow-600/20 rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition">🛡️</div>
+                <div class="flex-1">
+                    <div class="font-bold text-gray-200">Firebase Rules</div>
+                    <div class="text-xs text-gray-400">Security rules — read/write permissions</div>
+                </div>
+                <div class="text-gray-500">↗</div>
+            </a>
+
+            <a href="https://app.netlify.com/projects/effervescent-eclair-dbd8bc/overview" 
+               target="_blank" 
+               class="flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition group border border-white/10">
+                <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition">🚀</div>
+                <div class="flex-1">
+                    <div class="font-bold text-gray-200">Netlify</div>
+                    <div class="text-xs text-gray-400">Hosting — deploy and domain management</div>
+                </div>
+                <div class="text-gray-500">↗</div>
+            </a>
+
+            <a href="https://dashboard.render.com/web/srv-d8klcltdt1ts73a6ur1g/logs?t=app&r=1h" 
+               target="_blank" 
+               class="flex items-center gap-3 p-3 bg-red-600/10 rounded-xl hover:bg-red-600/20 transition group border border-red-500/20">
+                <div class="w-10 h-10 bg-red-600/20 rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition">🤖</div>
+                <div class="flex-1">
+                    <div class="font-bold text-gray-200">Render (Telegram Bot)</div>
+                    <div class="text-xs text-gray-400">Bot logs — check Telegram bot status</div>
+                </div>
+                <div class="text-gray-500">↗</div>
+            </a>
+        </div>
+        <div class="bg-[#0a0a0a] px-5 py-2 border-t border-[#222222] text-xs text-gray-500 flex justify-between">
+            <span>📌 Admin only</span>
+            <span>⚡ Opens in new tab</span>
+        </div>
+    </div>
+</div>
+</body>
+</html>
