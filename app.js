@@ -1431,6 +1431,9 @@ function applyAnalyticsFilter() {
     renderActivityChart(cards);
     renderDictStats(cards);
     renderExtraStats(cards);
+    
+    renderPhrasesCategoryStats(); 
+    
     renderForecast(allCardsCache);
 
     window.dispatchEvent(new CustomEvent('analytics:rendered', { detail: { filter: currentFilter } }));
@@ -2664,5 +2667,43 @@ document.addEventListener('DOMContentLoaded', () => {
 navBtns.forEach(btn => {
     btn.addEventListener('click', () => showScreen(btn.dataset.nav));
 });
+
+
+// ===== СТАТИСТИКА ФРАЗ ПО КАТЕГОРИЯМ (ТЕГАМ) =====
+function renderPhrasesCategoryStats() {
+    const container = document.getElementById('phrasesCategoryStats');
+    if (!container) return;
+
+    // Берем все фразы из кэша (он заполняется в loadAnalytics)
+    const phrases = allPhrasesCache || [];
+
+    const categories = {
+        'everyday': { label: '💬 Everyday English', count: 0, color: 'text-green-400' },
+        'university': { label: '🎓 University', count: 0, color: 'text-blue-400' },
+        'discussion': { label: '🗣️ Discussions', count: 0, color: 'text-yellow-400' },
+        'it': { label: '💻 IT & Programming', count: 0, color: 'text-indigo-400' },
+        'ai-cyber': { label: '🤖 AI & Cyber', count: 0, color: 'text-red-400' },
+        'academic': { label: '📚 Academic', count: 0, color: 'text-purple-400' }
+    };
+
+    // Считаем фразы по тегам
+    phrases.forEach(p => {
+        if (p.sources && p.sources.length > 0) {
+            p.sources.forEach(src => {
+                if (categories[src]) categories[src].count++;
+            });
+        }
+    });
+
+    // Сортируем от большего к меньшему
+    const sorted = Object.entries(categories).sort((a, b) => b[1].count - a[1].count);
+
+    container.innerHTML = sorted.map(([key, data]) => `
+        <div class="bg-[#0f0f0f] border border-[#222222] rounded-lg p-3 flex flex-col items-center justify-center text-center">
+            <div class="text-xl font-bold ${data.color}">${data.count}</div>
+            <div class="text-[11px] text-gray-400 mt-1 leading-tight">${data.label}</div>
+        </div>
+    `).join('');
+}
 
 showScreen('create');

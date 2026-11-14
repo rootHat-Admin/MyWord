@@ -86,16 +86,29 @@ if (tabCreateWord && tabCreatePhrase) {
 }
 
 // ===== ВЫБОР ИСТОЧНИКОВ ДЛЯ ФРАЗ =====
-const selectedPhraseSources = new Set();
+// ===== ВЫБОР ИСТОЧНИКОВ ДЛЯ ФРАЗ (ТОЛЬКО ОДИН) =====
+let selectedPhraseSource = null; // Теперь храним только одну строку, а не Set
+
 document.querySelectorAll('.phrase-source-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         const s = this.dataset.source;
-        if (selectedPhraseSources.has(s)) {
-            selectedPhraseSources.delete(s);
-            this.classList.remove('btn-green'); this.classList.add('btn-ghost');
+        
+        if (selectedPhraseSource === s) {
+            // Если кликнули по уже выбранному — снимаем выбор
+            selectedPhraseSource = null;
+            this.classList.remove('btn-green'); 
+            this.classList.add('btn-ghost');
         } else {
-            selectedPhraseSources.add(s);
-            this.classList.remove('btn-ghost'); this.classList.add('btn-green');
+            // Снимаем выделение со всех остальных
+            document.querySelectorAll('.phrase-source-btn').forEach(b => {
+                b.classList.remove('btn-green'); 
+                b.classList.add('btn-ghost');
+            });
+            
+            // Выделяем только текущий
+            selectedPhraseSource = s;
+            this.classList.remove('btn-ghost'); 
+            this.classList.add('btn-green');
         }
     });
 });
@@ -116,34 +129,52 @@ if (createPhraseDate) createPhraseDate.value = setPhraseDate();
 const savePhraseBtn = document.getElementById('savePhraseBtn');
 if (savePhraseBtn) {
     savePhraseBtn.addEventListener('click', async function() {
-        // ⛔ Защита от двойного клика
         if (this.disabled) return;
         
         const text = document.getElementById('phrasesInput').value;
         const interval = parseInt(document.getElementById('phraseIntervalSelect').value) || 1;
+        
+        // 🚨 ВАЛИДАЦИЯ ТЕГА
+        if (!selectedPhraseSource) {
+            showToast('⚠️ Пожалуйста, выберите категорию (Phrase source)!', 'warning');
+            // Подсветим красным блок с тегами
+            const sourceBlock = document.querySelector('.phrase-source-btn').parentElement;
+            sourceBlock.style.border = '1px solid #ef4444';
+            sourceBlock.style.borderRadius = '8px';
+            sourceBlock.style.padding = '4px';
+            setTimeout(() => {
+                sourceBlock.style.border = 'none';
+                sourceBlock.style.padding = '0';
+            }, 2000);
+            return;
+        }
+
         if (!text.trim()) { alert('Введи фразы'); return; }
         
-        // 🔒 Блокируем кнопку
         this.disabled = true;
         const originalText = this.textContent;
         this.textContent = '⏳ Saving...';
         
         try {
             const dateVal = document.getElementById('createPhraseDate').value;
-            const res = await createPhrases(text, interval, Array.from(selectedPhraseSources), [], dateVal);
+            // Передаём массив с одним выбранным тегом
+            const res = await createPhrases(text, interval, [selectedPhraseSource], [], dateVal);
+            
             let msg = `Created ${res.created} phrase(s)`;
             if (res.skipped > 0) msg += ` (${res.skipped} skipped — invalid or duplicate)`;
             showToast(msg, 'success');
+            
             document.getElementById('phrasesInput').value = '';
-            selectedPhraseSources.clear();
+            selectedPhraseSource = null; // Сбрасываем
+            
             document.querySelectorAll('.phrase-source-btn').forEach(b => {
-                b.classList.remove('btn-green'); b.classList.add('btn-ghost');
+                b.classList.remove('btn-green'); 
+                b.classList.add('btn-ghost');
             });
             if (createPhraseDate) createPhraseDate.value = setPhraseDate();
         } catch (e) {
             showToast(e.message, 'error');
         } finally {
-            // 🔓 Разблокируем кнопку
             this.disabled = false;
             this.textContent = originalText;
         }
