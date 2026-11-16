@@ -255,6 +255,7 @@ async function loadTodayPhrases() {
             </div>
             <div class="flex gap-2 flex-wrap">
                 <button class="copy-phrases-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-1.5 px-3 rounded-lg transition text-sm" data-date="${dateKey}">📋 Copy Phrases</button>
+                <button class="study-phrases-btn bg-purple-500 hover:bg-purple-600 text-white font-bold py-1.5 px-3 rounded-lg transition text-sm" data-date="${dateKey}">📖 To Study</button>
                 <button class="close-phrases-btn bg-green-500 hover:bg-green-600 text-white font-bold py-1.5 px-4 rounded-lg transition text-sm" data-date="${dateKey}">✅ Done</button>
             </div>
         `;
@@ -391,6 +392,28 @@ async function loadTodayPhrases() {
         });
     });
 
+    // TO STUDY — открыть модалку изучения фраз блока (по одной, с перелистыванием)
+    container.querySelectorAll('.study-phrases-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const date = this.dataset.date;
+            const listEl = container.querySelector(`[data-date-list="${date}"]`);
+            const rows = listEl.querySelectorAll('.phrase-clickable[data-english]');
+            const seen = new Set();
+            const list = [];
+            rows.forEach(r => {
+                const en = r.dataset.english;
+                const ru = r.dataset.russian;
+                const key = en + '|' + ru;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    list.push({ english: en, russian: ru });
+                }
+            });
+            if (list.length === 0) { showToast('No phrases to study', 'warning'); return; }
+            showStudyModal(list, date);
+        });
+    });
+
     // DONE — удалить выученные в блоке
     container.querySelectorAll('.close-phrases-btn').forEach(btn => {
         btn.addEventListener('click', async function() {
@@ -443,6 +466,111 @@ async function loadTodayPhrases() {
             showToast(`Postponed ${ids.length} phrase(s) by ${days} day(s) → ${formatFutureDate(days)}`, 'success');
             loadTodayPhrases();
         });
+    });
+}
+
+// ===== ГЛИЧ-АНИМАЦИЯ ДЛЯ РЕЖИМА TO STUDY =====
+function injectStudyGlitchStyles() {
+    if (document.getElementById('studyGlitchStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'studyGlitchStyles';
+    style.textContent = `
+        @keyframes studyGlitchIn {
+            0%   { opacity: 0; transform: translate(0,0); text-shadow: none; }
+            10%  { opacity: 1; transform: translate(-3px, 2px); text-shadow: -2px 0 #ff00c1, 2px 0 #00fff9; }
+            20%  { transform: translate(3px, -2px); text-shadow: 2px 0 #ff00c1, -2px 0 #00fff9; }
+            30%  { transform: translate(-2px, 1px); text-shadow: -2px 0 #ff00c1, 2px 0 #00fff9; }
+            40%  { transform: translate(2px, -1px); text-shadow: 1px 0 #ff00c1, -1px 0 #00fff9; }
+            60%  { transform: translate(-1px, 0); text-shadow: none; }
+            100% { opacity: 1; transform: translate(0,0); text-shadow: none; }
+        }
+        .study-glitch { animation: studyGlitchIn 0.35s steps(2, end); }
+    `;
+    document.head.appendChild(style);
+}
+
+// ===== МОДАЛКА: РЕЖИМ TO STUDY (перелистывание фраз по одной) =====
+function showStudyModal(phrasesList, dateKey) {
+    if (!phrasesList || phrasesList.length === 0) {
+        showToast('No phrases to study', 'warning');
+        return;
+    }
+    injectStudyGlitchStyles();
+
+    const old = document.getElementById('studyModal');
+    if (old) old.remove();
+
+    let idx = 0;
+
+    const modal = document.createElement('div');
+    modal.id = 'studyModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm';
+    modal.innerHTML = `
+        <div class="relative bg-[#0f0f1a] rounded-2xl max-w-md w-full p-6 border border-[#2a2a4a] shadow-2xl min-h-[320px] flex flex-col">
+            <button class="close-study-modal absolute top-3 right-3 text-gray-400 hover:text-white text-2xl leading-none" title="Close">&times;</button>
+            <div class="text-center text-indigo-400 text-xs font-bold uppercase tracking-wider mb-6">📖 To Study ${dateKey ? '— ' + esc(dateKey) : ''}</div>
+
+            <div class="flex-1 flex flex-col items-center justify-center text-center gap-4 px-2">
+                <div class="study-number text-indigo-400 font-bold text-sm"></div>
+                <div class="study-en text-white text-xl font-semibold break-words whitespace-pre-wrap"></div>
+                <div class="study-ru text-green-400 text-base break-words whitespace-pre-wrap"></div>
+            </div>
+
+            <div class="flex justify-between mt-4">
+                <button class="study-prev-btn bg-indigo-500 hover:bg-indigo-600 text-white font-bold w-12 h-12 rounded-full transition text-xl flex items-center justify-center" title="Previous phrase">⬅️</button>
+                <button class="study-next-btn bg-indigo-500 hover:bg-indigo-600 text-white font-bold w-12 h-12 rounded-full transition text-xl flex items-center justify-center" title="Next phrase">➡️</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const numEl = modal.querySelector('.study-number');
+    const enEl = modal.querySelector('.study-en');
+    const ruEl = modal.querySelector('.study-ru');
+    const nextBtn = modal.querySelector('.study-next-btn');
+    const prevBtn = modal.querySelector('.study-prev-btn');
+
+    function render() {
+        const ph = phrasesList[idx];
+        numEl.textContent = `#${idx + 1} / ${phrasesList.length}`;
+        enEl.textContent = ph.english;
+        ruEl.textContent = ph.russian;
+
+        [numEl, enEl, ruEl].forEach(el => {
+            el.classList.remove('study-glitch');
+            void el.offsetWidth; // форсируем reflow, чтобы анимация перезапустилась
+            el.classList.add('study-glitch');
+        });
+    }
+
+    render();
+
+    nextBtn.addEventListener('click', () => {
+        idx = (idx + 1) % phrasesList.length;
+        render();
+    });
+
+    prevBtn.addEventListener('click', () => {
+        idx = (idx - 1 + phrasesList.length) % phrasesList.length;
+        render();
+    });
+
+    // ===== ЗАКРЫТИЕ =====
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    modal.querySelectorAll('.close-study-modal').forEach(b => b.addEventListener('click', () => modal.remove()));
+    document.addEventListener('keydown', function studyEscHandler(e) {
+        if (!document.getElementById('studyModal')) {
+            document.removeEventListener('keydown', studyEscHandler);
+            return;
+        }
+        if (e.key === 'Escape') {
+            modal.remove();
+            document.removeEventListener('keydown', studyEscHandler);
+        } else if (e.key === 'ArrowRight') {
+            nextBtn.click();
+        } else if (e.key === 'ArrowLeft') {
+            prevBtn.click();
+        }
     });
 }
 
@@ -801,5 +929,5 @@ document.querySelectorAll('[data-nav="analytics"]').forEach(btn => {
     btn.addEventListener('click', () => setTimeout(updatePhraseAnalytics, 300));
 });
 
-// 🚀 v3.5: «первичная загрузка» убрана — она читала все фразы при каждом открытии страницы.
+// 🚀 v3.8: «первичная загрузка» убрана — она читала все фразы при каждом открытии страницы.
 // Счётчики обновляются при входе в Analytics (обработчик выше), данные берутся из кэша.
