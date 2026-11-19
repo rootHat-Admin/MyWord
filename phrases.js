@@ -10,6 +10,45 @@ function esc(str) {
     return String(str).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 }
 
+// ===== TTS (Web Speech API) — бесплатная озвучка, спокойный мужской голос =====
+let ttsVoice = null;
+
+function pickCalmMaleVoice() {
+    if (!('speechSynthesis' in window)) return null;
+    const voices = speechSynthesis.getVoices();
+    if (!voices.length) return null;
+    const enVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+    const pool = enVoices.length ? enVoices : voices;
+    // ищем по имени намёки на мужской голос (зависит от ОС/браузера пользователя)
+    const maleHints = ['male', 'david', 'daniel', 'george', 'guy', 'mark', 'alex', 'fred', 'james', 'ryan', 'tom'];
+    const found = pool.find(v => maleHints.some(h => v.name.toLowerCase().includes(h)));
+    return found || pool[0] || null;
+}
+
+function initTTS() {
+    if (!('speechSynthesis' in window)) return;
+    ttsVoice = pickCalmMaleVoice();
+    // голоса подгружаются асинхронно — обновляем выбор, когда они готовы
+    speechSynthesis.onvoiceschanged = () => { ttsVoice = pickCalmMaleVoice(); };
+}
+initTTS();
+
+function speakPhrase(text) {
+    if (!text) return;
+    if (!('speechSynthesis' in window)) {
+        showToast('Озвучка не поддерживается в этом браузере', 'warning');
+        return;
+    }
+    speechSynthesis.cancel(); // прерываем предыдущую озвучку, если была
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'en-US';
+    utter.rate = 0.60;   // спокойный, неторопливый темп
+    utter.pitch = 0.40;  // ниже тон → звучит как спокойный мужской голос
+    utter.volume = 1;
+    if (ttsVoice) utter.voice = ttsVoice;
+    speechSynthesis.speak(utter);
+}
+
 // ===== ТАБЫ В TODAY =====
 const tabTodayWords = document.getElementById('tabTodayWords');
 const tabTodayPhrases = document.getElementById('tabTodayPhrases');
@@ -512,7 +551,10 @@ function showStudyModal(phrasesList, dateKey) {
 
             <div class="flex-1 flex flex-col items-center justify-center text-center gap-4 px-2">
                 <div class="study-number text-indigo-400 font-bold text-sm"></div>
-                <div class="study-en text-white text-xl font-semibold break-words whitespace-pre-wrap"></div>
+                <div class="flex items-center justify-center gap-2">
+                    <div class="study-en text-white text-xl font-semibold break-words whitespace-pre-wrap"></div>
+                    <button class="study-speak-btn text-indigo-400 hover:text-indigo-300 transition text-2xl leading-none" title="Listen">🔊</button>
+                </div>
                 <div class="study-ru text-green-400 text-base break-words whitespace-pre-wrap"></div>
             </div>
 
@@ -529,8 +571,10 @@ function showStudyModal(phrasesList, dateKey) {
     const ruEl = modal.querySelector('.study-ru');
     const nextBtn = modal.querySelector('.study-next-btn');
     const prevBtn = modal.querySelector('.study-prev-btn');
+    const speakBtn = modal.querySelector('.study-speak-btn');
 
     function render() {
+        if ('speechSynthesis' in window) speechSynthesis.cancel(); // не даём старой озвучке играть поверх новой фразы
         const ph = phrasesList[idx];
         numEl.textContent = `#${idx + 1} / ${phrasesList.length}`;
         enEl.textContent = ph.english;
@@ -545,6 +589,8 @@ function showStudyModal(phrasesList, dateKey) {
 
     render();
 
+    speakBtn.addEventListener('click', () => speakPhrase(phrasesList[idx].english));
+
     nextBtn.addEventListener('click', () => {
         idx = (idx + 1) % phrasesList.length;
         render();
@@ -556,15 +602,19 @@ function showStudyModal(phrasesList, dateKey) {
     });
 
     // ===== ЗАКРЫТИЕ =====
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-    modal.querySelectorAll('.close-study-modal').forEach(b => b.addEventListener('click', () => modal.remove()));
+    const closeStudyModal = () => {
+        if ('speechSynthesis' in window) speechSynthesis.cancel();
+        modal.remove();
+    };
+    modal.addEventListener('click', e => { if (e.target === modal) closeStudyModal(); });
+    modal.querySelectorAll('.close-study-modal').forEach(b => b.addEventListener('click', closeStudyModal));
     document.addEventListener('keydown', function studyEscHandler(e) {
         if (!document.getElementById('studyModal')) {
             document.removeEventListener('keydown', studyEscHandler);
             return;
         }
         if (e.key === 'Escape') {
-            modal.remove();
+            closeStudyModal();
             document.removeEventListener('keydown', studyEscHandler);
         } else if (e.key === 'ArrowRight') {
             nextBtn.click();
@@ -929,5 +979,5 @@ document.querySelectorAll('[data-nav="analytics"]').forEach(btn => {
     btn.addEventListener('click', () => setTimeout(updatePhraseAnalytics, 300));
 });
 
-// 🚀 v3.8: «первичная загрузка» убрана — она читала все фразы при каждом открытии страницы.
+// v3.8.2: «первичная загрузка» убрана — она читала все фразы при каждом открытии страницы.
 // Счётчики обновляются при входе в Analytics (обработчик выше), данные берутся из кэша.
